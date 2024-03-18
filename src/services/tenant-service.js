@@ -5,43 +5,66 @@ const seed = require('../seeders')
 const { bootstrap, getTenantConnection } = require('./connection-service')
 
 const up = async (params) => {
-  const job = new Queue(
-    `setting-up-database-${new Date().getTime()}`,
-    `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
-  )
-  job.add({
-    ...params
-  })
-  job.process(async (job, done) => {
-    try {
-      await db.raw(`CREATE ROLE ${params.tenantName} WITH LOGIN;`)
-      await db.raw(
-        `GRANT ${params.tenantName} TO ${process.env.POSTGRES_ROLE};`
-      )
-      await db.raw(`CREATE DATABASE ${params.tenantName};`)
-      await db.raw(
-        `GRANT ALL PRIVILEGES ON DATABASE ${params.tenantName} TO ${params.tenantName};`
-      )
-
-      await bootstrap()
-      const tenant = getTenantConnection(params.uuid)
-      await migrate(tenant)
-      await seed(tenant)
-      done()
-    } catch (e) {
-      console.error(e)
-    }
-  })
+  try {
+    const job = new Queue(
+      `setting-up-database-${new Date().getTime()}`,
+      {
+        redis: {
+          host: process.env.REDIS_HOST, 
+          port: process.env.REDIS_PORT, 
+          password: process.env.REDIS_PASSWORD 
+        }
+      }
+    )
+    job.add({
+      ...params
+    },{
+      removeOnComplete: true,
+      removeOnFail: true
+    })
+    job.process(async (job, done) => {
+      try {
+        await db.raw(`CREATE ROLE ${params.tenantName} WITH LOGIN;`)
+        await db.raw(
+          `GRANT ${params.tenantName} TO ${process.env.DB_USER};`
+        )
+        await db.raw(`CREATE DATABASE ${params.tenantName};`)
+        await db.raw(
+          `GRANT ALL PRIVILEGES ON DATABASE ${params.tenantName} TO ${params.tenantName};`
+        )
+  
+        await bootstrap()
+        const tenant = getTenantConnection(params.uuid)
+        await migrate(tenant)
+        await seed(tenant)
+        console.log("created tenant");
+        done()
+      } catch (e) {
+        console.log(e)
+      }
+    })
+  } catch (error) {
+    console.log('error :>> ', error);
+  }
 }
 
 const down = async (params) => {
   const job = new Queue(
     `deleting-database-${new Date().getTime()}`,
-    `redis://${process.env.REDIS_HOST}:${process.env.REDIS_PORT}`
+    {
+      redis: {
+        host: process.env.REDIS_HOST, 
+        port: process.env.REDIS_PORT, 
+        password: process.env.REDIS_PASSWORD 
+      }
+    }
   )
 
   job.add({
     ...params
+  },{
+    removeOnComplete: true,
+    removeOnFail: true
   })
   job.process(async (job, done) => {
     try {

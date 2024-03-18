@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "example multitenant using nodejs and postgresql",
   "main": "index.js",
-  "author": "Agustin Espinoza",
+  "author": "YKP",
   "license": "MIT",
   "scripts": {
     "start": "nodemon ./src/index.js"
